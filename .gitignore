@@ -1,0 +1,31 @@
+# Build outputs
+build/
+app/build/
+*.apk
+*.aab
+*.ap_
+
+# Gradle caches
+.gradle/
+
+# Local SDK path — set sdk.dir in local.properties, never commit it
+local.properties
+
+# IDE
+.idea/
+*.iml
+*.iws
+.DS_Store
+Thumbs.db
+
+# Signing keystores
+*.jks
+*.keystore
+
+# Secrets / env
+.env
+*.local
+
+# Repo prep internals
+PUBLIC_REPO_AUDIT.md
+DOC_SCAFFOLD_REPORT.md
