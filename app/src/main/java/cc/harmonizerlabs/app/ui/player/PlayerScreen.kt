@@ -38,7 +38,9 @@ fun PlayerScreen(
     DisposableEffect(Unit) {
         viewModel.bindService()
         viewModel.loadTrack(track, initialMode)
-        onDispose { /* keep service alive for background; just unbind VM ref */ }
+        // Unbind the connection on leave; service keeps running because it was also started
+        // with startService(), so background playback continues uninterrupted.
+        onDispose { viewModel.unbindService() }
     }
 
     Box(Modifier.fillMaxSize().background(Black)) {

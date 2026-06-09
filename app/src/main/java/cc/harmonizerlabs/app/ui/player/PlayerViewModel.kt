@@ -49,9 +49,13 @@ class PlayerViewModel @Inject constructor(
             viewModelScope.launch {
                 svc.state.collect { ps -> _state.update { it.copy(playback = ps) } }
             }
-            // Load the pending track if already set
+            // Load the pending track only if the service hasn't already loaded one.
+            // Guarding here prevents a reconnect (e.g. after screen rotation) from
+            // restarting playback from beat 0 while the track is already playing.
             _state.value.trackData?.let { td ->
-                svc.loadTrack(td, _state.value.mode.key)
+                if (svc.state.value.durationMs == 0L) {
+                    svc.loadTrack(td, _state.value.mode.key)
+                }
             }
         }
         override fun onServiceDisconnected(name: ComponentName?) {

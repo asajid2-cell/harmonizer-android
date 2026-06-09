@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
@@ -90,9 +91,11 @@ class HarmonizerPlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
-    override fun onBind(intent: Intent?): IBinder {
-        super.onBind(intent)
-        return binder
+    // Route Media3 session-controller binds to super; local ViewModel binds get our binder.
+    // If both use the same binder, Media3 can't manage the foreground notification or
+    // lock-screen controls — they'd receive an unexpected IBinder type and silently fail.
+    override fun onBind(intent: Intent?): IBinder? {
+        return if (intent?.action == SERVICE_INTERFACE) super.onBind(intent) else binder
     }
 
     override fun onDestroy() {
@@ -110,7 +113,15 @@ class HarmonizerPlaybackService : MediaSessionService() {
         engine = engineFor(modeKey)
 
         val audioUrl = resolveAudioUrl(track.info.url)
-        val mainItem = MediaItem.fromUri(audioUrl)
+        val mainItem = MediaItem.Builder()
+            .setUri(audioUrl)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(track.title ?: "Unknown Track")
+                    .setArtist(track.artist ?: "")
+                    .build()
+            )
+            .build()
 
         mainPlayer.setMediaItem(mainItem)
         mainPlayer.prepare()
@@ -166,7 +177,21 @@ class HarmonizerPlaybackService : MediaSessionService() {
         // Switch to a rendered file (background render result) — stop beat engine
         beatJob?.cancel()
         val audioUrl = resolveAudioUrl(url)
-        mainPlayer.setMediaItem(MediaItem.fromUri(audioUrl))
+        val td = trackData
+        val item = if (td != null) {
+            MediaItem.Builder()
+                .setUri(audioUrl)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(td.title ?: "Unknown Track")
+                        .setArtist(td.artist ?: "")
+                        .build()
+                )
+                .build()
+        } else {
+            MediaItem.fromUri(audioUrl)
+        }
+        mainPlayer.setMediaItem(item)
         mainPlayer.prepare()
         overlayPlayer.stop()
     }
