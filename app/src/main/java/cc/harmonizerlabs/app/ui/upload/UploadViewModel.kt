@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cc.harmonizerlabs.app.api.HarmonizerApi
+import cc.harmonizerlabs.app.api.models.CachedSong
 import cc.harmonizerlabs.app.model.HarmonizerMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -37,6 +38,10 @@ data class UploadUiState(
     val completedTrackId: String? = null,
     val recentTracks: List<RecentTrack> = emptyList(),
     val showExperimentalModes: Boolean = false,
+    val showSongList: Boolean = false,
+    val cachedSongs: List<CachedSong> = emptyList(),
+    val isSongsLoading: Boolean = false,
+    val songsError: String? = null,
 )
 
 data class RecentTrack(
@@ -62,6 +67,24 @@ class UploadViewModel @Inject constructor(
     fun toggleExperimental() = _state.update { it.copy(showExperimentalModes = !it.showExperimentalModes) }
     fun clearError() = _state.update { it.copy(errorMessage = null) }
     fun clearCompletedTrack() = _state.update { it.copy(completedTrackId = null) }
+
+    fun openSongList() {
+        _state.update { it.copy(showSongList = true, isSongsLoading = true, songsError = null) }
+        viewModelScope.launch {
+            try {
+                val r = api.getCachedSongs()
+                if (r.isSuccessful) {
+                    _state.update { it.copy(isSongsLoading = false, cachedSongs = r.body()?.tracks ?: emptyList()) }
+                } else {
+                    _state.update { it.copy(isSongsLoading = false, songsError = "Server error ${r.code()}") }
+                }
+            } catch (e: Exception) {
+                _state.update { it.copy(isSongsLoading = false, songsError = e.localizedMessage ?: "Network error") }
+            }
+        }
+    }
+
+    fun closeSongList() = _state.update { it.copy(showSongList = false) }
 
     fun onFilePicked(context: Context, uri: Uri) {
         val name = uri.lastPathSegment?.substringAfterLast('/') ?: "audio"

@@ -55,6 +55,11 @@ interface HarmonizerApi {
         @Path("jobId") jobId: String,
     ): Response<RenderStatusResponse>
 
+    // ── Song library ─────────────────────────────────────────────────────────
+
+    @GET("api/cache/list")
+    suspend fun getCachedSongs(): Response<CachedSongsResponse>
+
     // ── Playlist info ─────────────────────────────────────────────────────────
 
     @POST("api/playlist-info")

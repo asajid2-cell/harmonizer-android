@@ -87,3 +87,16 @@ data class CanonSegment(
     @SerializedName("offset") val offset: Int,
     @SerializedName("label")  val label: String = "",
 )
+
+// ── Cached song library (/api/cache/list) ─────────────────────────────────────
+
+data class CachedSongsResponse(
+    @SerializedName("tracks") val tracks: List<CachedSong> = emptyList(),
+)
+
+data class CachedSong(
+    @SerializedName("trackId")  val trackId: String,
+    @SerializedName("title")    val title: String? = null,
+    @SerializedName("artist")   val artist: String? = null,
+    @SerializedName("duration") val duration: Double? = null,
+)

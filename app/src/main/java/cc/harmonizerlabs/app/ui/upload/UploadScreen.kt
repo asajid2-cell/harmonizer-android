@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.hilt.navigation.compose.hiltViewModel
 import cc.harmonizerlabs.app.model.*
 import cc.harmonizerlabs.app.ui.components.*
@@ -38,6 +41,102 @@ fun UploadScreen(
     val fileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? -> uri?.let { viewModel.onFilePicked(context, it) } }
+
+    var songSearch by remember { mutableStateOf("") }
+
+    if (state.showSongList) {
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.closeSongList(); songSearch = "" },
+            containerColor   = SurfaceDark,
+            scrimColor       = Black.copy(alpha = 0.75f),
+            shape            = RectangleShape,
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                Text(
+                    "SONG LIBRARY",
+                    style    = MaterialTheme.typography.labelLarge,
+                    color    = NeonCyan,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+                NeonTextField(
+                    value         = songSearch,
+                    onValueChange = { songSearch = it },
+                    placeholder   = "SEARCH SONGS...",
+                )
+                Spacer(Modifier.height(12.dp))
+                when {
+                    state.isSongsLoading -> {
+                        Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                            Text("LOADING...", style = MaterialTheme.typography.labelMedium, color = TextMuted)
+                        }
+                    }
+                    state.songsError != null -> {
+                        Text(
+                            text     = state.songsError ?: "",
+                            style    = MaterialTheme.typography.bodySmall,
+                            color    = NeonOrange,
+                            modifier = Modifier.padding(vertical = 16.dp),
+                        )
+                    }
+                    state.cachedSongs.isEmpty() -> {
+                        Text(
+                            "No uploaded songs found. Upload a track to get started.",
+                            style    = MaterialTheme.typography.bodySmall,
+                            color    = TextMuted,
+                            modifier = Modifier.padding(vertical = 16.dp),
+                        )
+                    }
+                    else -> {
+                        val filtered = state.cachedSongs.filter { song ->
+                            songSearch.isBlank() ||
+                            (song.title ?: "").contains(songSearch, ignoreCase = true) ||
+                            (song.artist ?: "").contains(songSearch, ignoreCase = true)
+                        }
+                        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
+                            items(filtered) { song ->
+                                val durationStr = song.duration?.let { d ->
+                                    val mins = (d / 60).toInt()
+                                    val secs = (d % 60).toInt()
+                                    "$mins:${secs.toString().padStart(2, '0')}"
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            viewModel.closeSongList()
+                                            songSearch = ""
+                                            onTrackReady(song.trackId, state.selectedMode)
+                                        }
+                                        .padding(vertical = 12.dp),
+                                ) {
+                                    Text("♫ ", color = NeonCyan, style = MaterialTheme.typography.bodyMedium)
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            song.title ?: "Unknown Track",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = TextPrimary,
+                                        )
+                                        Text(
+                                            buildString {
+                                                append(song.artist ?: "Unknown Artist")
+                                                if (durationStr != null) append(" • $durationStr")
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextMuted,
+                                        )
+                                    }
+                                    Text("►", color = NeonCyan, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                HorizontalDivider(color = NeonLime.copy(alpha = 0.1f))
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(32.dp))
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(Black)) {
         GridBackground()
@@ -217,6 +316,13 @@ fun UploadScreen(
                     label   = if (state.isSubmitting) "PROCESSING..." else "TRANSFORM TRACK",
                     onClick = { viewModel.submit(context) },
                     enabled = !state.isSubmitting,
+                )
+                Spacer(Modifier.height(8.dp))
+                NeonButton(
+                    label       = "VIEW SONGS",
+                    onClick     = { viewModel.openSongList() },
+                    borderColor = NeonCyan,
+                    modifier    = Modifier.fillMaxWidth(),
                 )
             }
 
