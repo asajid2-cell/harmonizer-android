@@ -19,10 +19,23 @@ android {
         buildConfigField("String", "BASE_URL", "\"https://harmonizerlabs.cc/\"")
     }
 
+    signingConfigs {
+        // Signed with the standard Android debug keystore so the release APK can be
+        // sideloaded without a separate signing step.  Replace with a production key
+        // before publishing to the Play Store.
+        create("debugSigned") {
+            storeFile     = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias      = "androiddebugkey"
+            keyPassword   = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debugSigned")
         }
         debug {
             buildConfigField("String", "BASE_URL", "\"https://harmonizerlabs.cc/\"")
