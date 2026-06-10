@@ -13,6 +13,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import cc.harmonizerlabs.app.BuildConfig
 import cc.harmonizerlabs.app.api.models.RenderDuration
 import cc.harmonizerlabs.app.api.models.RenderQuality
+import cc.harmonizerlabs.app.model.AdvancedSettings
 import cc.harmonizerlabs.app.ui.components.NeonButton
 import cc.harmonizerlabs.app.ui.components.NeonCtaButton
 import cc.harmonizerlabs.app.ui.theme.*
@@ -23,6 +24,7 @@ fun RenderSheet(
     trackId: String,
     modeKey: String,
     voiceCount: Int,
+    advancedSettings: AdvancedSettings = AdvancedSettings(),
     onPlayRendered: (url: String) -> Unit,
     onDismiss: () -> Unit,
     viewModel: RenderViewModel = hiltViewModel(),
@@ -167,9 +169,15 @@ fun RenderSheet(
                 }
 
                 else -> {
+                    Text(
+                        state.quality.description,
+                        style     = MaterialTheme.typography.bodySmall,
+                        color     = TextMuted,
+                        modifier  = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    )
                     NeonCtaButton(
                         label   = "◉ RENDER ${state.duration.label} · ${state.quality.label}",
-                        onClick = { viewModel.startRender(trackId, modeKey, voiceCount) },
+                        onClick = { viewModel.startRender(trackId, modeKey, voiceCount, advancedSettings) },
                     )
                 }
             }

@@ -66,4 +66,27 @@ interface HarmonizerApi {
     suspend fun getPlaylistInfo(
         @Body request: PlaylistInfoRequest,
     ): Response<PlaylistInfoResponse>
+
+    // ── Autocrooner styles ────────────────────────────────────────────────────
+
+    @GET("api/autocrooner/style/list")
+    suspend fun getAutocroonerStyles(): Response<AutocroonerStylesResponse>
+
+    @GET("api/autocrooner/style/{id}")
+    suspend fun getAutocroonerStyle(
+        @Path("id") id: String,
+    ): Response<AutocroonerStyleDetail>
+
+    // ── Autoharmonizer second track (multipart with audio2) ───────────────────
+
+    @Multipart
+    @POST("api/process")
+    suspend fun processAutoharmonizer(
+        @Part audio: MultipartBody.Part,
+        @Part audio2: MultipartBody.Part,
+        @Part("source") source: RequestBody,
+        @Part("algorithm") algorithm: RequestBody,
+        @Part("title") title: RequestBody,
+        @Part("artist") artist: RequestBody,
+    ): Response<ProcessResponse>
 }

@@ -32,6 +32,9 @@ data class UploadUiState(
     val artist: String = "",
     val selectedFileUri: Uri? = null,
     val selectedFileName: String? = null,
+    // Second track for Autoharmonizer
+    val audio2FileUri: Uri? = null,
+    val audio2FileName: String? = null,
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     val pendingJobId: String? = null,
@@ -91,14 +94,43 @@ class UploadViewModel @Inject constructor(
         _state.update { it.copy(selectedFileUri = uri, selectedFileName = name) }
     }
 
+    fun onAudio2Picked(context: Context, uri: Uri) {
+        val name = uri.lastPathSegment?.substringAfterLast('/') ?: "audio2"
+        _state.update { it.copy(audio2FileUri = uri, audio2FileName = name) }
+    }
+
     fun submit(context: Context) {
         val st = _state.value
         _state.update { it.copy(isSubmitting = true, errorMessage = null) }
 
         viewModelScope.launch {
             try {
-                val response = when (st.source) {
-                    UploadSource.FILE -> {
+                val response = when {
+                    st.selectedMode.key == "autoharmonizer" && st.source == UploadSource.FILE -> {
+                        val uri1 = st.selectedFileUri
+                            ?: throw IllegalStateException("No primary file selected")
+                        val uri2 = st.audio2FileUri
+                            ?: throw IllegalStateException("No second audio file selected for Autoharmonizer")
+                        val tmp1 = uriToTempFile(context, uri1)
+                        val tmp2 = uriToTempFile(context, uri2)
+                        val audioPart = MultipartBody.Part.createFormData(
+                            "audio", tmp1.name,
+                            tmp1.asRequestBody("audio/*".toMediaTypeOrNull()),
+                        )
+                        val audio2Part = MultipartBody.Part.createFormData(
+                            "audio2", tmp2.name,
+                            tmp2.asRequestBody("audio/*".toMediaTypeOrNull()),
+                        )
+                        api.processAutoharmonizer(
+                            audio     = audioPart,
+                            audio2    = audio2Part,
+                            source    = "upload".toRequestBody("text/plain".toMediaTypeOrNull()),
+                            algorithm = st.selectedMode.key.toRequestBody("text/plain".toMediaTypeOrNull()),
+                            title     = st.title.toRequestBody("text/plain".toMediaTypeOrNull()),
+                            artist    = st.artist.toRequestBody("text/plain".toMediaTypeOrNull()),
+                        )
+                    }
+                    st.source == UploadSource.FILE -> {
                         val uri = st.selectedFileUri
                             ?: throw IllegalStateException("No file selected")
                         val tmpFile = uriToTempFile(context, uri)
@@ -115,14 +147,14 @@ class UploadViewModel @Inject constructor(
                             artist    = st.artist.toRequestBody("text/plain".toMediaTypeOrNull()),
                         )
                     }
-                    UploadSource.YOUTUBE -> api.processTrackUrl(
+                    st.source == UploadSource.YOUTUBE -> api.processTrackUrl(
                         source     = "youtube",
                         algorithm  = st.selectedMode.key,
                         youtubeUrl = st.urlInput,
                         title      = st.title,
                         artist     = st.artist,
                     )
-                    UploadSource.SPOTIFY -> api.processTrackUrl(
+                    else -> api.processTrackUrl(
                         source     = "spotify",
                         algorithm  = st.selectedMode.key,
                         spotifyUrl = st.urlInput,

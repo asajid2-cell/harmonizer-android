@@ -42,6 +42,10 @@ fun UploadScreen(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? -> uri?.let { viewModel.onFilePicked(context, it) } }
 
+    val file2Launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> uri?.let { viewModel.onAudio2Picked(context, it) } }
+
     var songSearch by remember { mutableStateOf("") }
 
     if (state.showSongList) {
@@ -261,7 +265,7 @@ fun UploadScreen(
 
                 when (state.source) {
                     UploadSource.FILE -> {
-                        // Tap-to-pick zone
+                        // Primary audio file picker
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
@@ -281,6 +285,36 @@ fun UploadScreen(
                                 color = if (state.selectedFileUri != null) NeonCyan else TextMuted,
                                 textAlign = TextAlign.Center,
                             )
+                        }
+                        // Second track picker — only for Autoharmonizer
+                        if (state.selectedMode.key == "autoharmonizer") {
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                "SECOND TRACK (HARMONY SOURCE)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = NeonMagenta,
+                                modifier = Modifier.padding(bottom = 6.dp),
+                            )
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(72.dp)
+                                    .border(
+                                        width = 2.dp,
+                                        color = NeonMagenta.copy(alpha = if (state.audio2FileUri != null) 1f else 0.4f),
+                                        shape = RoundedCornerShape(0.dp),
+                                    )
+                                    .background(SurfaceDark)
+                                    .clickable { file2Launcher.launch("audio/*") },
+                            ) {
+                                Text(
+                                    text  = state.audio2FileName ?: "TAP TO PICK SECOND AUDIO FILE",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (state.audio2FileUri != null) NeonMagenta else TextMuted,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
                         }
                     }
                     UploadSource.YOUTUBE -> NeonTextField(

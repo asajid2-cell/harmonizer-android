@@ -3,13 +3,13 @@ package cc.harmonizerlabs.app.api.models
 import com.google.gson.annotations.SerializedName
 
 data class BackgroundRenderRequest(
-    @SerializedName("trackId")    val trackId: String,
-    @SerializedName("mode")       val mode: String,       // "canon" | "jukebox" | "eternal"
-    @SerializedName("minutes")    val minutes: Int,
-    @SerializedName("seed")       val seed: Int = 42,
-    @SerializedName("voiceCount") val voiceCount: Int = 2,
-    @SerializedName("quality")    val quality: String = "standard",  // "draft" | "standard" | "high"
-    @SerializedName("settings")   val settings: Map<String, Any>? = null,
+    @SerializedName("trackId")          val trackId: String,
+    @SerializedName("mode")             val mode: String,
+    @SerializedName("minutes")          val minutes: Int,
+    @SerializedName("seed")             val seed: Int = 42,
+    @SerializedName("voiceCount")       val voiceCount: Int = 2,
+    @SerializedName("quality")          val quality: String = "balanced",  // "fast" | "balanced" | "high"
+    @SerializedName("advancedSettings") val advancedSettings: Map<String, Map<String, Double>>? = null,
 )
 
 data class BackgroundRenderResponse(
@@ -39,8 +39,9 @@ enum class RenderDuration(val minutes: Int, val label: String) {
     SIXTY(60, "60 MIN"),
 }
 
-enum class RenderQuality(val key: String, val label: String) {
-    DRAFT("draft", "DRAFT"),
-    STANDARD("standard", "STANDARD"),
-    HIGH("high", "HIGH"),
+// Keys must match what the server accepts: fast=22kHz/96k, balanced=32kHz/128k, high=44.1kHz/160k
+enum class RenderQuality(val key: String, val label: String, val description: String) {
+    FAST("fast", "FAST", "22 kHz · 96k"),
+    BALANCED("balanced", "BALANCED", "32 kHz · 128k"),
+    HIGH("high", "HIGH", "44.1 kHz · 160k"),
 }

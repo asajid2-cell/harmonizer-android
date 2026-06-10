@@ -31,6 +31,8 @@ data class PlaybackState(
     val noBurnout: Boolean = true,
     val trackTitle: String = "",
     val trackArtist: String = "",
+    val phaseIntensity: Float = 1.0f,
+    val baseAudioOnly: Boolean = false,
 )
 
 class HarmonizerPlaybackService : MediaSessionService() {
@@ -172,6 +174,20 @@ class HarmonizerPlaybackService : MediaSessionService() {
     fun setVoiceCount(n: Int) = _state.update { it.copy(voiceCount = n) }
     fun setLoop(v: Boolean)   = _state.update { it.copy(loopEnabled = v) }
     fun setNoBurnout(v: Boolean) = _state.update { it.copy(noBurnout = v) }
+
+    fun setPhaseIntensity(v: Float) {
+        _state.update { it.copy(phaseIntensity = v) }
+        // Phase intensity changes the overlay volume during Phase Shifter mode.
+        // A value of 0 = dry (overlay silent), 4 = fully wet (max phase effect).
+        if (_state.value.mode == "phaseshifter") {
+            overlayPlayer.volume = (v / 4f).coerceIn(0f, 1f) * OVERLAY_VOLUME
+        }
+    }
+
+    fun setBaseAudioOnly(v: Boolean) {
+        _state.update { it.copy(baseAudioOnly = v) }
+        overlayPlayer.volume = if (v) 0f else OVERLAY_VOLUME
+    }
 
     fun loadRenderedAudio(url: String) {
         // Switch to a rendered file (background render result) — stop beat engine
