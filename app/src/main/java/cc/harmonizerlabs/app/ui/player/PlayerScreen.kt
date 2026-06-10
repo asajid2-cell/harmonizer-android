@@ -19,6 +19,7 @@ import cc.harmonizerlabs.app.api.models.TrackData
 import cc.harmonizerlabs.app.model.ExperimentalModes
 import cc.harmonizerlabs.app.model.HarmonizerMode
 import cc.harmonizerlabs.app.model.PrimaryModes
+import cc.harmonizerlabs.app.model.AdvancedSettings
 import cc.harmonizerlabs.app.ui.components.*
 import cc.harmonizerlabs.app.ui.render.RenderSheet
 import cc.harmonizerlabs.app.ui.theme.*
@@ -198,17 +199,34 @@ fun PlayerScreen(
 
                 Spacer(Modifier.height(20.dp))
 
-                // Voices slider
-                NeonSlider(
-                    label         = "VOICES",
-                    value         = state.playback.voiceCount.toFloat(),
-                    onValueChange = { viewModel.setVoiceCount(it.toInt()) },
-                    valueRange    = 2f..8f,
-                    steps         = 5,
-                    valueLabel    = state.playback.voiceCount.toString(),
-                )
+                // Voice count — only relevant for overlay modes (canon, eternal, phaseshifter, chromastack)
+                if (state.mode.key in AdvancedSettings.OVERLAY_MODES) {
+                    NeonSlider(
+                        label         = "VOICES",
+                        value         = state.playback.voiceCount.toFloat(),
+                        onValueChange = { viewModel.setVoiceCount(it.toInt()) },
+                        valueRange    = 2f..8f,
+                        steps         = 5,
+                        valueLabel    = state.playback.voiceCount.toString(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
 
-                Spacer(Modifier.height(16.dp))
+                // Phase intensity — Phase Shifter only
+                if (state.mode.key == "phaseshifter") {
+                    NeonSlider(
+                        label         = "PHASE INTENSITY",
+                        value         = state.advancedSettings.phaseIntensity,
+                        onValueChange = { v ->
+                            viewModel.updateAdvancedSettings(state.advancedSettings.copy(phaseIntensity = v))
+                        },
+                        valueRange    = 0f..4f,
+                        valueLabel    = "%.1fx".format(state.advancedSettings.phaseIntensity),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                Spacer(Modifier.height(8.dp))
 
                 // Action buttons row
                 Row(
@@ -246,14 +264,31 @@ fun PlayerScreen(
                         )
                         Spacer(Modifier.height(10.dp))
 
-                        // No Burnout toggle
+                        // Global toggles
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        ) {
+                            Text(
+                                "LOOP",
+                                style    = MaterialTheme.typography.labelSmall,
+                                color    = TextMuted,
+                                modifier = Modifier.weight(1f),
+                            )
+                            NeonButton(
+                                label       = if (state.playback.loopEnabled) "ON" else "OFF",
+                                onClick     = { viewModel.setLoop(!state.playback.loopEnabled) },
+                                active      = state.playback.loopEnabled,
+                                borderColor = NeonCyan,
+                            )
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                         ) {
                             Text(
                                 "NO BURNOUT",
-                                style    = MaterialTheme.typography.labelMedium,
+                                style    = MaterialTheme.typography.labelSmall,
                                 color    = TextMuted,
                                 modifier = Modifier.weight(1f),
                             )
@@ -264,10 +299,68 @@ fun PlayerScreen(
                                 borderColor = NeonCyan,
                             )
                         }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        ) {
+                            Text(
+                                "BASE AUDIO ONLY",
+                                style    = MaterialTheme.typography.labelSmall,
+                                color    = TextMuted,
+                                modifier = Modifier.weight(1f),
+                            )
+                            NeonButton(
+                                label       = if (state.advancedSettings.baseAudioOnly) "ON" else "OFF",
+                                onClick     = {
+                                    viewModel.updateAdvancedSettings(
+                                        state.advancedSettings.copy(
+                                            baseAudioOnly = !state.advancedSettings.baseAudioOnly
+                                        )
+                                    )
+                                },
+                                active      = state.advancedSettings.baseAudioOnly,
+                                borderColor = NeonOrange,
+                            )
+                        }
+
+                        // Autocrooner style selector
+                        if (state.mode.key == "autocrooner") {
+                            Text(
+                                "STYLE",
+                                style    = MaterialTheme.typography.labelSmall,
+                                color    = NeonCyan,
+                                modifier = Modifier.padding(bottom = 4.dp),
+                            )
+                            if (state.autocroonerStyles.isEmpty()) {
+                                NeonButton(
+                                    label   = if (state.isLoadingStyles) "LOADING..." else "LOAD STYLES",
+                                    onClick = { viewModel.loadAutocroonerStyles() },
+                                    borderColor = NeonCyan,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            } else {
+                                state.autocroonerStyles.forEach { style ->
+                                    NeonButton(
+                                        label       = style.name,
+                                        onClick     = { viewModel.selectAutocroonerStyle(style.id) },
+                                        active      = state.selectedStyleId == style.id,
+                                        borderColor = NeonCyan,
+                                        modifier    = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+
+                        // Per-mode advanced knobs
+                        AdvancedSettingsPanel(
+                            modeKey  = state.mode.key,
+                            settings = state.advancedSettings,
+                            onUpdate = { viewModel.updateAdvancedSettings(it) },
+                        )
 
                         Spacer(Modifier.height(8.dp))
-
-                        // Mode info
+                        // Mode description
                         Text(
                             state.mode.description,
                             style = MaterialTheme.typography.bodySmall,
@@ -327,10 +420,11 @@ fun PlayerScreen(
         // ── Background render sheet ────────────────────────────────────────────
         if (state.showRenderSheet) {
             RenderSheet(
-                trackId     = track.id,
-                modeKey     = state.mode.key,
-                voiceCount  = state.playback.voiceCount,
-                onPlayRendered = { url ->
+                trackId          = track.id,
+                modeKey          = state.mode.key,
+                voiceCount       = state.playback.voiceCount,
+                advancedSettings = state.advancedSettings,
+                onPlayRendered   = { url ->
                     viewModel.loadRenderedAudio(url)
                     viewModel.hideRenderSheet()
                 },

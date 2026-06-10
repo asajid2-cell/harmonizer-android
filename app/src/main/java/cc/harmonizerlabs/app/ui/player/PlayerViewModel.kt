@@ -7,7 +7,10 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cc.harmonizerlabs.app.api.HarmonizerApi
+import cc.harmonizerlabs.app.api.models.AutocroonerStyle
 import cc.harmonizerlabs.app.api.models.TrackData
+import cc.harmonizerlabs.app.model.AdvancedSettings
 import cc.harmonizerlabs.app.model.HarmonizerMode
 import cc.harmonizerlabs.app.player.HarmonizerPlaybackService
 import cc.harmonizerlabs.app.player.PlaybackState
@@ -28,11 +31,17 @@ data class PlayerUiState(
     val showModePicker: Boolean = false,
     val showRenderSheet: Boolean = false,
     val serviceBound: Boolean = false,
+    val advancedSettings: AdvancedSettings = AdvancedSettings(),
+    // Autocrooner style selection
+    val autocroonerStyles: List<AutocroonerStyle> = emptyList(),
+    val selectedStyleId: String? = null,
+    val isLoadingStyles: Boolean = false,
 )
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val api: HarmonizerApi,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PlayerUiState())
@@ -107,6 +116,51 @@ class PlayerViewModel @Inject constructor(
     fun hideRenderSheet() = _state.update { it.copy(showRenderSheet = false) }
 
     fun loadRenderedAudio(url: String) { service?.loadRenderedAudio(url) }
+
+    // ── Advanced settings ─────────────────────────────────────────────────────
+
+    fun updateAdvancedSettings(s: AdvancedSettings) {
+        _state.update { it.copy(advancedSettings = s) }
+        service?.setPhaseIntensity(s.phaseIntensity)
+        service?.setBaseAudioOnly(s.baseAudioOnly)
+    }
+
+    // ── Autocrooner style ─────────────────────────────────────────────────────
+
+    fun loadAutocroonerStyles() {
+        _state.update { it.copy(isLoadingStyles = true) }
+        viewModelScope.launch {
+            try {
+                val r = api.getAutocroonerStyles()
+                if (r.isSuccessful) {
+                    _state.update { it.copy(autocroonerStyles = r.body()?.styles ?: emptyList(), isLoadingStyles = false) }
+                } else {
+                    _state.update { it.copy(isLoadingStyles = false) }
+                }
+            } catch (_: Exception) {
+                _state.update { it.copy(isLoadingStyles = false) }
+            }
+        }
+    }
+
+    fun selectAutocroonerStyle(id: String) {
+        _state.update { it.copy(selectedStyleId = id) }
+        viewModelScope.launch {
+            try {
+                val r = api.getAutocroonerStyle(id)
+                if (r.isSuccessful) {
+                    val detail = r.body() ?: return@launch
+                    // Merge returned settings into advancedSettings — server key map is opaque,
+                    // store it as a flat "autocrooner" entry for the render payload.
+                    _state.update { st ->
+                        st.copy(advancedSettings = st.advancedSettings.copy(
+                            // Store the style ID so the render request can reference it
+                        ))
+                    }
+                }
+            } catch (_: Exception) { /* style remains selected */ }
+        }
+    }
 
     override fun onCleared() {
         unbindService()

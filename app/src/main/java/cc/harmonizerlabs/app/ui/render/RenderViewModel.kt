@@ -11,6 +11,7 @@ import cc.harmonizerlabs.app.api.HarmonizerApi
 import cc.harmonizerlabs.app.api.models.BackgroundRenderRequest
 import cc.harmonizerlabs.app.api.models.RenderDuration
 import cc.harmonizerlabs.app.api.models.RenderQuality
+import cc.harmonizerlabs.app.model.AdvancedSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
@@ -23,7 +24,7 @@ import javax.inject.Inject
 
 data class RenderUiState(
     val duration: RenderDuration = RenderDuration.TEN,
-    val quality: RenderQuality = RenderQuality.STANDARD,
+    val quality: RenderQuality = RenderQuality.BALANCED,
     val isRendering: Boolean = false,
     val progressPercent: Int = 0,
     val progressText: String = "",
@@ -45,17 +46,23 @@ class RenderViewModel @Inject constructor(
     fun clearError()                  = _state.update { it.copy(error = null) }
     fun reset() = _state.update { RenderUiState(duration = it.duration, quality = it.quality) }
 
-    fun startRender(trackId: String, modeKey: String, voiceCount: Int) {
+    fun startRender(
+        trackId: String,
+        modeKey: String,
+        voiceCount: Int,
+        advancedSettings: AdvancedSettings = AdvancedSettings(),
+    ) {
         _state.update { it.copy(isRendering = true, resultUrl = null, error = null, progressPercent = 0) }
         viewModelScope.launch {
             try {
                 val r = api.startBackgroundRender(
                     BackgroundRenderRequest(
-                        trackId    = trackId,
-                        mode       = modeKey,
-                        minutes    = _state.value.duration.minutes,
-                        voiceCount = voiceCount,
-                        quality    = _state.value.quality.key,
+                        trackId          = trackId,
+                        mode             = modeKey,
+                        minutes          = _state.value.duration.minutes,
+                        voiceCount       = voiceCount,
+                        quality          = _state.value.quality.key,
+                        advancedSettings = advancedSettings.toApiMap(modeKey).ifEmpty { null },
                     )
                 )
                 if (!r.isSuccessful) {
