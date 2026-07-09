@@ -6,81 +6,82 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Using system fonts — plug in Manrope + IBM Plex Mono asset fonts here
-// if bundled later. Letter-spacing + weight preserve the Harmonizer look.
+// Manrope (bundled, see Font.kt) is the primary face — matching the web app, which loads
+// Manrope 400/600/700 from Google Fonts. Monospace styles keep the system mono face for
+// ASCII dividers + numeric/tabular readouts, mirroring the web's IBM Plex Mono usage.
 
 val HarmonizerTypography = Typography(
-    // "H A R M O N I Z E R" title
+    // "H A R M O N I Z E R" title — web: Manrope 600, letter-spacing 0.15em, uppercase
     displayLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Black,
+        fontFamily = ManropeFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp,
         lineHeight = 28.sp,
         letterSpacing = 8.sp,
     ),
-    // Panel headings
+    // Panel headings — web h2: Manrope, 0.1em, uppercase
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = ManropeFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 15.sp,
         lineHeight = 20.sp,
         letterSpacing = 2.sp,
     ),
     headlineSmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = ManropeFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 13.sp,
         lineHeight = 18.sp,
         letterSpacing = 1.5.sp,
     ),
-    // Button / label uppercase
+    // Button / label uppercase — web: Manrope 600, 0.16em
     labelSmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Bold,
+        fontFamily = ManropeFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 9.sp,
         lineHeight = 13.sp,
         letterSpacing = 2.sp,
     ),
     labelMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Bold,
+        fontFamily = ManropeFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 11.sp,
         lineHeight = 15.sp,
         letterSpacing = 1.8.sp,
     ),
     labelLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = ManropeFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 12.sp,
         lineHeight = 16.sp,
         letterSpacing = 1.5.sp,
     ),
-    // Body
+    // Body — web: Manrope 400
     bodyMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = ManropeFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         letterSpacing = 0.3.sp,
     ),
     bodySmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = ManropeFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.2.sp,
     ),
-    // Monospace — ASCII dividers, numeric values
+    // Monospace — ASCII dividers, numeric values, the viz timer readout (web: IBM Plex Mono)
     titleMedium = TextStyle(
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Normal,
+        fontFamily = PlexMonoFamily,
+        fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 15.sp,
         letterSpacing = 0.sp,
     ),
-    // Mode card title
+    // Mode card title — web h3: Manrope bold, 0.1em
     titleSmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = ManropeFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 11.sp,
         lineHeight = 14.sp,

@@ -9,12 +9,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import cc.harmonizerlabs.app.ui.theme.Black
 
-/** Dot-grid background — matches the CSS radial-gradient dot pattern on harmonizer.html */
+/**
+ * Dot-grid "starfield" background — matches the CSS radial-gradient dot pattern on the web
+ * (`body` in modern.css / `.desktop` in index.html). `bright = true` reproduces the index
+ * starfield (near-full-white dots); the default keeps the dim lab grid.
+ */
 @Composable
-fun GridBackground(modifier: Modifier = Modifier) {
+fun GridBackground(modifier: Modifier = Modifier, bright: Boolean = false) {
     Canvas(modifier = modifier.fillMaxSize()) {
-        val dot1Color = Color.White.copy(alpha = 0.06f)
-        val dot2Color = Color.White.copy(alpha = 0.03f)
+        val dot1Color = Color.White.copy(alpha = if (bright) 0.55f else 0.06f)
+        val dot2Color = Color.White.copy(alpha = if (bright) 0.28f else 0.03f)
         val step1 = 50.dp.toPx()
         val step2 = 80.dp.toPx()
         val dotR = 1.5f

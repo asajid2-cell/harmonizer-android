@@ -36,6 +36,9 @@ data class PlayerUiState(
     val autocroonerStyles: List<AutocroonerStyle> = emptyList(),
     val selectedStyleId: String? = null,
     val isLoadingStyles: Boolean = false,
+    // Section Sculptor — ordered list of section indices in the timeline
+    val sculptorArrangement: List<Int> = emptyList(),
+    val sculptorInitialized: Boolean = false,
 )
 
 @HiltViewModel
@@ -87,7 +90,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun loadTrack(track: TrackData, mode: HarmonizerMode) {
-        _state.update { it.copy(trackData = track, mode = mode) }
+        _state.update { it.copy(trackData = track, mode = mode, sculptorInitialized = false, sculptorArrangement = emptyList()) }
         service?.loadTrack(track, mode.key)
     }
 
@@ -101,13 +104,36 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun setMode(mode: HarmonizerMode) {
-        _state.update { it.copy(mode = mode, showModePicker = false) }
+        _state.update { it.copy(mode = mode, showModePicker = false, sculptorInitialized = false, sculptorArrangement = emptyList()) }
         val track = _state.value.trackData ?: return
         service?.loadTrack(track, mode.key)
     }
 
     fun setLoop(v: Boolean) { service?.setLoop(v) }
     fun setNoBurnout(v: Boolean) { service?.setNoBurnout(v) }
+
+    // ── Section Sculptor arrangement ──────────────────────────────────────────
+
+    private fun sectionCount() = _state.value.trackData?.analysis?.sections?.size ?: 0
+
+    /** Populate the timeline with the track's sections in natural order on first view. */
+    fun initSculptorArrangement() {
+        if (_state.value.sculptorInitialized) return
+        val natural = (0 until sectionCount()).toList()
+        _state.update { it.copy(sculptorArrangement = natural, sculptorInitialized = true) }
+        service?.setSculptorArrangement(natural)
+    }
+
+    fun addSculptorSection(idx: Int)   = applySculptor(_state.value.sculptorArrangement + idx)
+    fun removeSculptorAt(pos: Int)     = applySculptor(_state.value.sculptorArrangement.toMutableList().also { if (pos in it.indices) it.removeAt(pos) })
+    fun resetSculptor()                = applySculptor((0 until sectionCount()).toList())
+    fun clearSculptor()                = applySculptor(emptyList())
+    fun shuffleSculptor()              = applySculptor(_state.value.sculptorArrangement.shuffled())
+
+    private fun applySculptor(order: List<Int>) {
+        _state.update { it.copy(sculptorArrangement = order, sculptorInitialized = true) }
+        service?.setSculptorArrangement(order)
+    }
 
     fun toggleAdvanced() = _state.update { it.copy(showAdvanced = !it.showAdvanced) }
     fun showModePicker() = _state.update { it.copy(showModePicker = true) }

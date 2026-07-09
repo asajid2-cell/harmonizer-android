@@ -1,16 +1,21 @@
 package cc.harmonizerlabs.app.navigation
 
+import android.content.Intent
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.*
 import androidx.navigation.compose.*
 import cc.harmonizerlabs.app.model.HarmonizerMode
 import cc.harmonizerlabs.app.ui.SharedTrackViewModel
+import cc.harmonizerlabs.app.ui.home.DiscothequeHomeScreen
 import cc.harmonizerlabs.app.ui.player.PlayerScreen
 import cc.harmonizerlabs.app.ui.processing.ProcessingScreen
 import cc.harmonizerlabs.app.ui.upload.UploadScreen
 
 sealed class Screen(val route: String) {
+    object Home       : Screen("home")
     object Upload     : Screen("upload")
     object Processing : Screen("processing/{trackId}/{modeKey}") {
         fun createRoute(trackId: String, modeKey: String) = "processing/$trackId/$modeKey"
@@ -23,19 +28,36 @@ fun HarmonizerNavGraph(
     navController: NavHostController = rememberNavController(),
     sharedVm: SharedTrackViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
+
     NavHost(
         navController = navController,
-        startDestination = Screen.Upload.route,
+        startDestination = Screen.Home.route,
     ) {
 
-        // ── Upload ─────────────────────────────────────────────────────────────
+        // ── Home / Internet Discotheque ─────────────────────────────────────────
+        composable(Screen.Home.route) {
+            DiscothequeHomeScreen(
+                onOpenHarmonizer = {
+                    navController.navigate(Screen.Upload.route) { launchSingleTop = true }
+                },
+                onOpenUrl = { url ->
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                    }
+                },
+            )
+        }
+
+        // ── Upload / Harmonizer Lab ─────────────────────────────────────────────
         composable(Screen.Upload.route) {
             UploadScreen(
                 onTrackReady = { trackId, mode ->
                     navController.navigate(Screen.Processing.createRoute(trackId, mode.key)) {
                         launchSingleTop = true
                     }
-                }
+                },
+                onBack = { navController.popBackStack() },
             )
         }
 

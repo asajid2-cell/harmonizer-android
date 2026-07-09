@@ -80,7 +80,9 @@ fun NeonCtaButton(
             disabledContainerColor = NeonLime.copy(alpha = 0.25f),
             disabledContentColor   = Black.copy(alpha = 0.4f),
         ),
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .neonGlow(NeonLime, glowRadius = 10.dp, intensity = if (enabled) 0.55f else 0f),
         contentPadding = PaddingValues(vertical = 14.dp),
     ) {
         Text(

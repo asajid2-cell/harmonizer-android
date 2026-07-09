@@ -62,6 +62,24 @@ class UploadViewModel @Inject constructor(
     private val _state = MutableStateFlow(UploadUiState())
     val state: StateFlow<UploadUiState> = _state.asStateFlow()
 
+    init {
+        // Prefetch the 231-track library on start so it's usually ready the instant the
+        // user taps VIEW SONGS — the cache/list round-trip otherwise stalls the sheet.
+        prefetchSongs()
+    }
+
+    private fun prefetchSongs() {
+        if (_state.value.cachedSongs.isNotEmpty()) return
+        viewModelScope.launch {
+            try {
+                val r = api.getCachedSongs()
+                if (r.isSuccessful) {
+                    _state.update { it.copy(cachedSongs = r.body()?.tracks ?: it.cachedSongs) }
+                }
+            } catch (_: Exception) { /* a real error surfaces when the list is opened */ }
+        }
+    }
+
     fun selectMode(mode: HarmonizerMode) = _state.update { it.copy(selectedMode = mode) }
     fun selectSource(src: UploadSource) = _state.update { it.copy(source = src, urlInput = "") }
     fun setUrlInput(v: String) = _state.update { it.copy(urlInput = v) }
@@ -72,17 +90,25 @@ class UploadViewModel @Inject constructor(
     fun clearCompletedTrack() = _state.update { it.copy(completedTrackId = null) }
 
     fun openSongList() {
-        _state.update { it.copy(showSongList = true, isSongsLoading = true, songsError = null) }
+        val haveSongs = _state.value.cachedSongs.isNotEmpty()
+        // Show the cached list instantly if we already have it (prefetch / prior open); only show
+        // LOADING on a true cold open. Either way, refresh quietly in the background.
+        _state.update { it.copy(showSongList = true, isSongsLoading = !haveSongs, songsError = null) }
         viewModelScope.launch {
             try {
                 val r = api.getCachedSongs()
                 if (r.isSuccessful) {
-                    _state.update { it.copy(isSongsLoading = false, cachedSongs = r.body()?.tracks ?: emptyList()) }
-                } else {
+                    _state.update { it.copy(isSongsLoading = false, cachedSongs = r.body()?.tracks ?: it.cachedSongs) }
+                } else if (!haveSongs) {
                     _state.update { it.copy(isSongsLoading = false, songsError = "Server error ${r.code()}") }
+                } else {
+                    _state.update { it.copy(isSongsLoading = false) }
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(isSongsLoading = false, songsError = e.localizedMessage ?: "Network error") }
+                _state.update {
+                    if (haveSongs) it.copy(isSongsLoading = false)
+                    else it.copy(isSongsLoading = false, songsError = e.localizedMessage ?: "Network error")
+                }
             }
         }
     }
@@ -114,12 +140,12 @@ class UploadViewModel @Inject constructor(
                         val tmp1 = uriToTempFile(context, uri1)
                         val tmp2 = uriToTempFile(context, uri2)
                         val audioPart = MultipartBody.Part.createFormData(
-                            "audio", tmp1.name,
-                            tmp1.asRequestBody("audio/*".toMediaTypeOrNull()),
+                            "audio", displayName(context, uri1),
+                            tmp1.asRequestBody(mimeOf(context, uri1).toMediaTypeOrNull()),
                         )
                         val audio2Part = MultipartBody.Part.createFormData(
-                            "audio2", tmp2.name,
-                            tmp2.asRequestBody("audio/*".toMediaTypeOrNull()),
+                            "audio2", displayName(context, uri2),
+                            tmp2.asRequestBody(mimeOf(context, uri2).toMediaTypeOrNull()),
                         )
                         api.processAutoharmonizer(
                             audio     = audioPart,
@@ -136,8 +162,8 @@ class UploadViewModel @Inject constructor(
                         val tmpFile = uriToTempFile(context, uri)
                         val audioPart = MultipartBody.Part.createFormData(
                             "audio",
-                            tmpFile.name,
-                            tmpFile.asRequestBody("audio/*".toMediaTypeOrNull()),
+                            displayName(context, uri),
+                            tmpFile.asRequestBody(mimeOf(context, uri).toMediaTypeOrNull()),
                         )
                         api.processTrackUpload(
                             audio     = audioPart,
@@ -164,7 +190,11 @@ class UploadViewModel @Inject constructor(
                 }
 
                 if (!response.isSuccessful) {
-                    _state.update { it.copy(isSubmitting = false, errorMessage = "Server error ${response.code()}") }
+                    // Prefer the server's own message (e.g. YouTube/Spotify download failures carry
+                    // actionable text like "Upload the audio file directly") over a bare HTTP code.
+                    val msg = response.errorBody()?.string()?.let(::extractServerError)
+                        ?: "Server error ${response.code()}"
+                    _state.update { it.copy(isSubmitting = false, errorMessage = msg) }
                     return@launch
                 }
 
@@ -193,14 +223,16 @@ class UploadViewModel @Inject constructor(
                     _state.update { it.copy(isSubmitting = false, errorMessage = "Poll failed ${r.code()}") }
                     return
                 }
+                // Server terminal states are "completed" / "failed" (the web checks these exact
+                // strings); accept the shorter variants defensively.
                 when (r.body()?.status) {
-                    "complete" -> {
+                    "completed", "complete", "done" -> {
                         val trackId = r.body()?.result?.trackId
                         if (trackId != null) finishWithTrack(trackId)
                         else _state.update { it.copy(isSubmitting = false, errorMessage = "No trackId in result") }
                         return
                     }
-                    "error" -> {
+                    "failed", "error" -> {
                         _state.update { it.copy(isSubmitting = false, errorMessage = r.body()?.error ?: "Processing failed") }
                         return
                     }
@@ -230,6 +262,18 @@ class UploadViewModel @Inject constructor(
         }
     }
 
+    // Pull the server's `error` message out of an error-response body. Servers return a long
+    // multi-line message for download failures; show the headline (first line) in the banner.
+    private fun extractServerError(body: String): String? = try {
+        org.json.JSONObject(body).optString("error")
+            .takeIf { it.isNotBlank() }
+            ?.substringBefore("\n")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        null
+    }
+
     private fun uriToTempFile(context: Context, uri: Uri): File {
         val tmp = File.createTempFile("harmonizer_upload", ".audio", context.cacheDir)
         context.contentResolver.openInputStream(uri)?.use { input ->
@@ -237,4 +281,25 @@ class UploadViewModel @Inject constructor(
         }
         return tmp
     }
+
+    // Real filename (with extension) for an uploaded URI. The server validates the multipart
+    // part's filename to detect the audio format, so it must be e.g. "song.mp3", not a generic
+    // ".audio" temp name (which yields a 400).
+    private fun displayName(context: Context, uri: Uri): String {
+        var name: String? = null
+        context.contentResolver.query(
+            uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null,
+        )?.use { c ->
+            if (c.moveToFirst()) {
+                val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0) name = c.getString(idx)
+            }
+        }
+        return name?.takeIf { it.contains('.') } ?: "audio.mp3"
+    }
+
+    // Concrete MIME for the part (never the wildcard audio type, which servers reject).
+    private val WILDCARD_AUDIO = "audio/" + "*"
+    private fun mimeOf(context: Context, uri: Uri): String =
+        context.contentResolver.getType(uri)?.takeIf { it != WILDCARD_AUDIO } ?: "audio/mpeg"
 }

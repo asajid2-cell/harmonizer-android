@@ -92,8 +92,10 @@ class RenderViewModel @Inject constructor(
                         progressText    = body.progress ?: "",
                     )
                 }
+                // Server terminal states are "completed" / "failed" (the web checks these exact
+                // strings). Accept the shorter variants too, defensively.
                 when (body.status) {
-                    "complete" -> {
+                    "completed", "complete", "done" -> {
                         val url = body.result?.url
                         if (url != null) {
                             _state.update { it.copy(isRendering = false, resultUrl = url, progressPercent = 100) }
@@ -102,7 +104,7 @@ class RenderViewModel @Inject constructor(
                         }
                         return
                     }
-                    "error" -> {
+                    "failed", "error" -> {
                         _state.update { it.copy(isRendering = false, error = body.error ?: "Render failed") }
                         return
                     }

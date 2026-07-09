@@ -14,10 +14,11 @@ class JukeboxEngineTest {
     private fun analysis(
         beats: List<Beat>,
         candidates: List<LoopCandidate>? = null,
+        sections: List<Section> = emptyList(),
     ) = TrackAnalysis(
         beats          = beats,
         segments       = emptyList(),
-        sections       = emptyList(),
+        sections       = sections,
         loopCandidates = candidates,
     )
 
@@ -76,19 +77,24 @@ class JukeboxEngineTest {
     // Use two separate analysis objects so we can build up the counter deterministically
     // (sameSection-only analysis for the counter, then both-candidate analysis for the trigger).
 
+    // Sections split the timeline: section 0 = starts [0,5), section 1 = starts [5,10).
+    // Beats are at it*0.5, so beats 0..9 are section 0 and 10..19 are section 1 — derived from
+    // the sections list (the engine no longer trusts a per-beat section field, which the server omits).
+    private val twoSections = listOf(Section(start = 0.0, duration = 5.0), Section(start = 5.0, duration = 5.0))
+
     @Test fun noBurnoutForcesSectionJumpAfter9Beats() {
-        val beats = (0 until 20).map { beat(it * 0.5, section = if (it < 10) 0 else 1) }
+        val beats = (0 until 20).map { beat(it * 0.5) }
 
         // Same-section-only analysis: ONLY the target=4 candidate (section 0 → section 0).
         // This forces the engine to always pick target 4 and builds the counter deterministically.
         val sameSectionOnly = analysis(beats, listOf(
             LoopCandidate(source = 3, target = 4, similarity = 0.9),
-        ))
+        ), sections = twoSections)
         // Two-candidate analysis: both same-section (target=4) and cross-section (target=12).
         val twoCandidates = analysis(beats, listOf(
             LoopCandidate(source = 3, target = 4,  similarity = 0.9),
             LoopCandidate(source = 3, target = 12, similarity = 0.8),
-        ))
+        ), sections = twoSections)
         val t = track(twoCandidates)
         val engine = JukeboxEngine()
 
@@ -101,16 +107,16 @@ class JukeboxEngineTest {
     }
 
     @Test fun noBurnoutDisabledDoesNotForceSectionJump() {
-        val beats = (0 until 20).map { beat(it * 0.5, section = if (it < 10) 0 else 1) }
+        val beats = (0 until 20).map { beat(it * 0.5) }
 
         // Only same-section candidate — builds counter without interference.
         val sameSectionOnly = analysis(beats, listOf(
             LoopCandidate(source = 3, target = 4, similarity = 0.9),
-        ))
+        ), sections = twoSections)
         val twoCandidates = analysis(beats, listOf(
             LoopCandidate(source = 3, target = 4,  similarity = 0.9),
             LoopCandidate(source = 3, target = 12, similarity = 0.8),
-        ))
+        ), sections = twoSections)
         val t = track(twoCandidates)
         val engine = JukeboxEngine()
 

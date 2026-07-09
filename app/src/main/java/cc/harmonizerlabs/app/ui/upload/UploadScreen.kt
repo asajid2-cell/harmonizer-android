@@ -3,6 +3,7 @@ package cc.harmonizerlabs.app.ui.upload
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,8 +14,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.hilt.navigation.compose.hiltViewModel
 import cc.harmonizerlabs.app.model.*
@@ -25,6 +40,7 @@ import cc.harmonizerlabs.app.ui.theme.*
 @Composable
 fun UploadScreen(
     onTrackReady: (trackId: String, mode: HarmonizerMode) -> Unit,
+    onBack: () -> Unit = {},
     viewModel: UploadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -148,42 +164,59 @@ fun UploadScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .verticalScroll(rememberScrollState()),
         ) {
             NeonBar()
 
-            // ── Title ─────────────────────────────────────────────────────────
-            Spacer(Modifier.height(24.dp))
+            // ── Back to Internet Discotheque ───────────────────────────────────
             Text(
-                text      = "H A R M O N I Z E R",
-                style     = MaterialTheme.typography.displayLarge,
-                color     = NeonMagenta,
-                textAlign = TextAlign.Center,
-                modifier  = Modifier.fillMaxWidth(),
-            )
-            Text(
-                text      = "harmonizerlabs.cc",
-                style     = MaterialTheme.typography.titleMedium,
-                color     = TextMuted,
-                textAlign = TextAlign.Center,
-                modifier  = Modifier.fillMaxWidth().padding(top = 4.dp),
+                text = "← RETURN TO INTERNET DISCOTHEQUE",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted,
+                modifier = Modifier
+                    .padding(start = 16.dp, top = 12.dp)
+                    .clickable { onBack() }
+                    .padding(vertical = 6.dp, horizontal = 2.dp),
             )
 
-            Spacer(Modifier.height(28.dp))
+            // ── Hero ──────────────────────────────────────────────────────────
+            Spacer(Modifier.height(16.dp))
+            LabHero()
+
+            Spacer(Modifier.height(24.dp))
+
+            // ── LOAD A TRACK heading ──────────────────────────────────────────
+            Text(
+                "LOAD A TRACK",
+                style    = MaterialTheme.typography.titleLarge,
+                color    = NeonLime,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Text(
+                "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+                style     = MaterialTheme.typography.titleMedium,
+                color     = NeonLime.copy(alpha = 0.5f),
+                fontFamily = PlexMonoFamily,
+                maxLines  = 1,
+                modifier  = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
+            Spacer(Modifier.height(14.dp))
 
             // ── Mode panel ────────────────────────────────────────────────────
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .border(2.dp, NeonLime)
+                    .border(3.dp, NeonLime)
                     .background(Black)
                     .padding(16.dp),
             ) {
                 Text(
-                    "SELECT MODE",
+                    "ENGINE",
                     style = MaterialTheme.typography.labelMedium,
-                    color = NeonLime,
+                    color = NeonCyan,
+                    letterSpacing = 2.sp,
                 )
                 Spacer(Modifier.height(12.dp))
 
@@ -235,7 +268,7 @@ fun UploadScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .border(2.dp, NeonLime)
+                    .border(3.dp, NeonLime)
                     .background(Black)
                     .padding(16.dp),
             ) {
@@ -383,6 +416,7 @@ fun UploadScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
+                        .neonGlow(NeonLime, glowRadius = 8.dp, intensity = 0.4f)
                         .border(2.dp, NeonLime)
                         .background(Black)
                         .padding(16.dp),
@@ -418,4 +452,228 @@ fun UploadScreen(
             Spacer(Modifier.height(32.dp))
         }
     }
+}
+
+/* ── Harmonizer Lab hero — faithful port of harmonizer.html `.hero` ────────────── */
+
+private data class Callout(val mode: String, val effect: String)
+
+private val LabCallouts = listOf(
+    Callout("CANON MODE", "MIRROR VOICES"),
+    Callout("JUKEBOX MODE", "JUMP AND NEVER STOP"),
+    Callout("ETERNAL MODE", "LAYER AND REPEAT"),
+    Callout("AUTOHARMONIZER", "DUAL TRACK FUSION"),
+    Callout("SECTION SCULPTOR", "ARRANGE CLIPS"),
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LabHero() {
+    // Pulsing cyan title glow — mirrors the CSS `title-pulse` keyframes (20px <-> 40px).
+    val pulse = rememberInfiniteTransition(label = "title-pulse")
+    val glow by pulse.animateFloat(
+        initialValue = 18f,
+        targetValue = 40f,
+        animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
+        label = "glow",
+    )
+
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        // eyebrow
+        Text(
+            "*** WELCOME TO THE HARMONIZER LAB ***",
+            color = NeonLime,
+            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp,
+            letterSpacing = 1.5.sp,
+            style = TextStyle(shadow = Shadow(NeonLime, Offset.Zero, 12f)),
+        )
+        Spacer(Modifier.height(10.dp))
+
+        // title
+        Text(
+            "HASHTAG\nINFINITE LOOPS",
+            color = NeonCyan,
+            fontFamily = ManropeFamily,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 30.sp,
+            lineHeight = 34.sp,
+            letterSpacing = 2.sp,
+            style = TextStyle(shadow = Shadow(NeonCyan, Offset.Zero, glow)),
+        )
+        Spacer(Modifier.height(12.dp))
+
+        // lede
+        Text(
+            "UPLOAD YOUR TRACK. WE SLICE IT INTO BEATS, FIND THE PERFECT " +
+                "MATCHES, AND CREATE ENDLESS SEAMLESS LOOPS. YOUR MUSIC NEVER HAS TO END.",
+            color = NeonOrange,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp,
+            lineHeight = 22.sp,
+            letterSpacing = 0.5.sp,
+        )
+        Spacer(Modifier.height(16.dp))
+
+        // callouts
+        LabCallouts.forEach { c ->
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = NeonCyan)) { append("⟡  ") }
+                    withStyle(SpanStyle(color = NeonMagenta, fontWeight = FontWeight.Bold,
+                        shadow = Shadow(NeonMagenta, Offset.Zero, 8f))) { append(c.mode) }
+                    withStyle(SpanStyle(color = NeonCyan)) { append("  →  ${c.effect}") }
+                },
+                fontFamily = PlexMonoFamily,
+                fontSize = 13.sp,
+                lineHeight = 22.sp,
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // side dancers (web keeps these with the callouts)
+        AsciiDancersRow()
+
+        Spacer(Modifier.height(18.dp))
+
+        // badges
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LabBadge("BUSINESS CASUAL PRESENTS", NeonMagenta)
+            LabBadge("ALOE ISLAND POSSE", NeonOrange)
+            LabBadge("THE INTERNET'S DISCONTENT", NeonCyan)
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // hero visual — orbit rings + ascii woman (web `.hero-visual`)
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { HeroVisual() }
+    }
+}
+
+private val DancerPink = androidx.compose.ui.graphics.Color(0xFFFF6BD6)
+
+// `.ascii-woman` from harmonizer.html
+private val AsciiWoman = """
+       _)))
+      /|||\
+     ({O O})
+      ( > )
+      /|||\
+     / | | \
+      /   \
+     |     |
+   _/ \___/ \_
+  /   ( | )   \
+ '    _\_//_   '
+      o2  o2
+""".trim('\n')
+
+// `.ascii-dancer-side`
+private val AsciiDancerArt = """
+ ♫♪
+ /|\
+/ | \
+  |
+ ( )
+  o2
+""".trim('\n')
+
+// 0..1 ease-in-out bounce factor (web `side-bounce`/`title` motion), phase-shiftable.
+private fun bounceFactor(phase: Float): Float {
+    val p = phase - kotlin.math.floor(phase)
+    return (0.5 - 0.5 * kotlin.math.cos(2.0 * Math.PI * p)).toFloat()
+}
+
+@Composable
+private fun HeroVisual() {
+    // Motion ported from modern.css: woman-dance (2s, rotate ±3°), ring-rotate (20s, 360°).
+    val t = rememberInfiniteTransition(label = "hero")
+    val wphase by t.animateFloat(0f, 1f,
+        infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Restart), label = "woman")
+    val ring by t.animateFloat(0f, 360f,
+        infiniteRepeatable(tween(20000, easing = LinearEasing), RepeatMode.Restart), label = "ring")
+
+    Box(Modifier.size(260.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val p = 14.dp.toPx()
+            val w = size.width
+            val h = size.height
+            // cyan ring — spins (ring-rotate)
+            rotate(degrees = ring) {
+                drawOval(
+                    color = NeonCyan,
+                    topLeft = Offset(p, p * 1.8f),
+                    size = Size(w - p * 2f, h - p * 2.4f),
+                    style = Stroke(width = 3f),
+                )
+            }
+            // magenta ring — spins, offset to overlap (the two .hero-ring ellipses)
+            rotate(degrees = ring + 18f) {
+                drawOval(
+                    color = NeonMagenta,
+                    topLeft = Offset(p * 1.6f, p * 0.4f),
+                    size = Size(w - p * 2.4f, h - p * 1.6f),
+                    style = Stroke(width = 3f),
+                )
+            }
+        }
+        Text(
+            AsciiWoman,
+            color = NeonOrange,
+            fontFamily = PlexMonoFamily,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
+            softWrap = false,
+            style = TextStyle(shadow = Shadow(NeonOrange, Offset.Zero, 8f)),
+            modifier = Modifier.graphicsLayer {
+                rotationZ = -3f * kotlin.math.sin(2.0 * Math.PI * wphase).toFloat()
+            },
+        )
+    }
+}
+
+/** The two bouncing side dancers (web `.ascii-dancer-cluster`, sits with the callouts). */
+@Composable
+private fun AsciiDancersRow() {
+    val t = rememberInfiniteTransition(label = "dancers")
+    val bounce by t.animateFloat(0f, 1f,
+        infiniteRepeatable(tween(2500, easing = LinearEasing), RepeatMode.Restart), label = "bounce")
+    val amp = with(LocalDensity.current) { 8.dp.toPx() }
+    Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        AsciiDancer(NeonCyan, -amp * bounceFactor(bounce))
+        AsciiDancer(DancerPink, -amp * bounceFactor(bounce + 0.4f))
+    }
+}
+
+@Composable
+private fun AsciiDancer(color: androidx.compose.ui.graphics.Color, translateY: Float) {
+    Text(
+        AsciiDancerArt,
+        color = color,
+        fontFamily = PlexMonoFamily,
+        fontSize = 13.sp,
+        lineHeight = 15.sp,
+        softWrap = false,
+        style = TextStyle(shadow = Shadow(color, Offset.Zero, 8f)),
+        modifier = Modifier.graphicsLayer { this.translationY = translateY },
+    )
+}
+
+@Composable
+private fun LabBadge(label: String, color: androidx.compose.ui.graphics.Color) {
+    // web `badge-glow` 2s ease-in-out pulse
+    val pulse = rememberInfiniteTransition(label = "badge")
+    val blur by pulse.animateFloat(6f, 14f,
+        infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Reverse), label = "badge-blur")
+    Text(
+        label,
+        color = color,
+        fontWeight = FontWeight.Bold,
+        fontSize = 10.sp,
+        letterSpacing = 1.sp,
+        style = TextStyle(shadow = Shadow(color, Offset.Zero, blur)),
+        modifier = Modifier
+            .border(3.dp, color)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    )
 }

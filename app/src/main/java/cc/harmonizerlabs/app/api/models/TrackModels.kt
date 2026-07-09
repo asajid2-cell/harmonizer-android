@@ -18,6 +18,8 @@ data class TrackData(
     @SerializedName("analysis")      val analysis: TrackAnalysis,
     @SerializedName("title")         val title: String? = null,
     @SerializedName("artist")        val artist: String? = null,
+    // Web uses `track.audio_url || track.info.url` — prefer this when present.
+    @SerializedName("audio_url")     val audioUrl: String? = null,
 )
 
 data class TrackInfo(
@@ -53,6 +55,7 @@ data class Beat(
 )
 
 data class Segment(
+    @SerializedName("start")           val start: Double = 0.0,
     @SerializedName("timbre")          val timbre: List<Double>,
     @SerializedName("pitches")         val pitches: List<Double>,
     @SerializedName("loudness_start")  val loudnessStart: Double,

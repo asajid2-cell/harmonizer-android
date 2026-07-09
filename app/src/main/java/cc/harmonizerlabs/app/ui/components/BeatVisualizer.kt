@@ -18,12 +18,17 @@ import cc.harmonizerlabs.app.model.HarmonizerMode
 import cc.harmonizerlabs.app.ui.theme.*
 import kotlin.math.min
 
+// Vivid per-section hues — the web tiles read as a bright, saturated grid, so the cells
+// need real colour (the old near-black palette vanished against the black background).
 private val sectionPalette = listOf(
-    Color(0xFF1A2848),  // verse — dark blue
-    Color(0xFF2A1840),  // chorus — dark purple
-    Color(0xFF122830),  // bridge — dark teal
-    Color(0xFF281420),  // outro  — dark rose
-    Color(0xFF181828),  // intro  — dark indigo
+    Color(0xFF2E6BFF),  // blue
+    Color(0xFFB14CFF),  // purple
+    Color(0xFF18C7B0),  // teal
+    Color(0xFFFF5C8A),  // rose
+    Color(0xFF6E7BFF),  // periwinkle
+    Color(0xFFFFA94C),  // peach
+    Color(0xFF4CE0FF),  // sky
+    Color(0xFFFF7AD1),  // hot pink
 )
 
 /**
@@ -39,7 +44,10 @@ fun BeatVisualizer(
     currentBeatIndex: Int,
     mode: HarmonizerMode,
     modifier: Modifier = Modifier,
+    segments: List<cc.harmonizerlabs.app.api.models.Segment> = emptyList(),
 ) {
+    // Real per-beat energy from segment loudness (server beats carry no volume of their own).
+    val energies = remember(beats, segments) { beatEnergies(beats, segments) }
     val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
         initialValue   = 0.6f,
         targetValue    = 1.0f,
@@ -74,20 +82,42 @@ fun BeatVisualizer(
 
             val sectionIdx  = beatSection[i].coerceIn(0, sectionPalette.lastIndex)
             val baseColor   = sectionPalette[sectionIdx % sectionPalette.size]
-            val energy      = beat.medianVolume.toFloat().coerceIn(0f, 1f)
-            val energyColor = baseColor.copy(alpha = 0.3f + energy * 0.55f)
+            val energy      = energies.getOrElse(i) { 0.6f }
+            // Energy modulates brightness, but with a healthy floor so the grid is always legible.
+            val played      = i < currentBeatIndex
+            val energyAlpha = (0.45f + energy * 0.5f) * (if (played) 0.55f else 1f)
+            val energyColor = baseColor.copy(alpha = energyAlpha)
 
+            val isCurrent = i == currentBeatIndex
+            val isPair = canonAlignment != null && i < canonAlignment.pairs.size &&
+                    canonAlignment.pairs[i] == currentBeatIndex
             val fillColor = when {
-                i == currentBeatIndex -> NeonCyan.copy(alpha = pulse)
-                canonAlignment != null && i < canonAlignment.pairs.size &&
-                        canonAlignment.pairs[i] == currentBeatIndex -> NeonMagenta.copy(alpha = 0.6f * pulse)
-                else -> energyColor
+                isCurrent -> NeonCyan.copy(alpha = pulse)
+                isPair    -> NeonMagenta.copy(alpha = 0.7f * pulse)
+                else      -> energyColor
+            }
+
+            // Soft glow behind the active beat so it reads as a bright playhead
+            if (isCurrent) {
+                drawRect(
+                    color   = NeonCyan.copy(alpha = 0.25f * pulse),
+                    topLeft = Offset(x - cellW * 0.4f, y - cellH * 0.4f),
+                    size    = Size(cellW * 1.8f, cellH * 1.8f),
+                )
             }
 
             drawRect(color = fillColor, topLeft = Offset(x, y), size = Size(cellW, cellH))
 
-            // border for current beat
-            if (i == currentBeatIndex) {
+            // Thin cell outline gives the grid structure even where cells are dim
+            drawRect(
+                color   = baseColor.copy(alpha = 0.22f),
+                topLeft = Offset(x, y),
+                size    = Size(cellW, cellH),
+                style   = Stroke(width = 0.8f),
+            )
+
+            // bright border for current beat
+            if (isCurrent) {
                 drawRect(
                     color   = NeonCyan,
                     topLeft = Offset(x, y),

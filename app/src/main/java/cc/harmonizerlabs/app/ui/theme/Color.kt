@@ -18,6 +18,20 @@ val SurfaceMid  = Color(0xFF0D0D1A)
 val TextPrimary = Color(0xFFFFFFFF)
 val TextMuted   = Color(0x8CFFFFFF)  // 55% white
 
+// Rose/mauve accent — web --color-accent (#E8B4B8): viz timer, stats, queue highlights
+val NeonRose    = Color(0xFFE8B4B8)
+val RoseGlow    = Color(0xB3E8B4B8)  // 70%
+
+// Note-particle palette — web's 8 --note-color track hues (floating ♫ glyphs)
+val NoteColors = listOf(
+    Color(0xFFE8B4B8),  // rose
+    Color(0xFF8AC1FF),  // sky blue
+    Color(0xFFFFD09A),  // warm peach
+    Color(0xFFA0FFEE),  // cyan-green
+    Color(0xFFFFA0D2),  // hot pink
+    Color(0xFF9AB5FF),  // periwinkle
+)
+
 // Glow-ready semi-transparent versions
 val CyanGlow10  = Color(0x1A00FFDE)
 val CyanGlow25  = Color(0x4000FFDE)

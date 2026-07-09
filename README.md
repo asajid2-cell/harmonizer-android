@@ -1,10 +1,14 @@
-# Harmonizer Android
+# Harmonizer Android — background music the browser can't do
 
-Native Android client for [harmonizerlabs.cc](https://harmonizerlabs.cc) — beat-aware music canon, jukebox, and eternal loop modes with background play and system media controls.
+**A native Android client for [harmonizerlabs.cc](https://harmonizerlabs.cc) that keeps beat-synced, multi-voice music playing after you lock your screen — something a browser can't reliably do on Android.**
 
-**Status:** builds and installs. Requires a live connection to harmonizerlabs.cc.  
-**Audience:** Android users of the Harmonizer web app who want background play and lockscreen controls.  
-**Platform:** Android 8.0+ (API 26). Debug APK: 20 MB.
+> **Why it exists:** the Harmonizer web app runs in a browser, but browsers suspend audio the moment the screen locks. This app uses Android's `MediaSessionService` to keep playback alive, drive lockscreen / Bluetooth / headset controls, and run the beat-jump engine off the main thread — none of which a PWA can do reliably on Android.
+
+**What it does:** upload a track (file, or YouTube/Spotify URL); the server analyzes its beats and sections; the app plays it in **Canon** (two self-harmonizing voices), **Jukebox** (seamless beat-jumping that never ends), or **Eternal** (both at once).
+
+**Stack:** Kotlin · Jetpack Compose · Media3/ExoPlayer · Hilt · Retrofit · Android 8.0+ (API 26) · 20 MB debug APK · `./gradlew assembleDebug`.
+
+**Proof:** builds clean to a **20 MB debug APK** (`./gradlew assembleDebug`); background playback is wired through Android's `MediaSessionService`, so audio and lockscreen controls survive screen-off. *(Screenshots pending device capture — plan in [`docs/demo/demo-script.md`](docs/demo/demo-script.md).)*
 
 ---
 

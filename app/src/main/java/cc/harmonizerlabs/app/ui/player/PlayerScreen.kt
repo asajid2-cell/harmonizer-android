@@ -1,6 +1,7 @@
 package cc.harmonizerlabs.app.ui.player
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -44,6 +45,11 @@ fun PlayerScreen(
         onDispose { viewModel.unbindService() }
     }
 
+    // Populate the sculptor timeline (natural section order) once the service is ready
+    LaunchedEffect(state.mode.key, state.serviceBound) {
+        if (state.mode.key == "sculptor" && state.serviceBound) viewModel.initSculptorArrangement()
+    }
+
     Box(Modifier.fillMaxSize().background(Black)) {
         GridBackground()
 
@@ -80,7 +86,9 @@ fun PlayerScreen(
                     shape  = RectangleShape,
                     color  = NeonMagenta.copy(alpha = 0.15f),
                     border = BorderStroke(1.dp, NeonMagenta.copy(alpha = 0.7f)),
-                    modifier = Modifier.clickable { viewModel.showModePicker() },
+                    modifier = Modifier
+                        .neonGlow(NeonMagenta, glowRadius = 8.dp, intensity = 0.5f)
+                        .clickable { viewModel.showModePicker() },
                 ) {
                     Text(
                         state.mode.displayName,
@@ -95,22 +103,55 @@ fun PlayerScreen(
             val beats    = track.analysis.beats
             val sections = track.analysis.sections
             val canon    = track.analysis.canonAlignment
+            val isPlaying = state.playback.isPlaying
+
+            // Breathing border glow while playing — mirrors the web's sweepGlow on the
+            // music field (border alpha pulses cyan-ward instead of sitting static lime).
+            val breathe by rememberInfiniteTransition(label = "breathe").animateFloat(
+                initialValue  = 0.3f,
+                targetValue   = 0.75f,
+                animationSpec = infiniteRepeatable(
+                    animation  = tween(1600, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "breathe_alpha",
+            )
+            val borderColor = if (isPlaying) NeonCyan.copy(alpha = breathe) else NeonLime.copy(alpha = 0.3f)
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(180.dp)
                     .padding(horizontal = 12.dp)
-                    .border(2.dp, NeonLime.copy(alpha = 0.3f))
+                    .neonGlow(NeonCyan, glowRadius = 14.dp, intensity = if (isPlaying) breathe else 0f)
+                    .border(2.dp, borderColor)
                     .background(SurfaceDark),
             ) {
-                BeatVisualizer(
-                    beats              = beats,
-                    sections           = sections,
-                    canonAlignment     = canon,
-                    currentBeatIndex   = state.playback.currentBeatIndex,
-                    mode               = state.mode,
-                    modifier           = Modifier.fillMaxSize().padding(4.dp),
+                // Jukebox/eternal get the circular orbit (web's viz-orbit); other modes the grid.
+                if (state.mode.key == "jukebox" || state.mode.key == "eternal") {
+                    JukeboxOrbitVisualizer(
+                        beats            = beats,
+                        sections         = sections,
+                        loopCandidates   = track.analysis.loopCandidates,
+                        currentBeatIndex = state.playback.currentBeatIndex,
+                        segments         = track.analysis.segments,
+                        modifier         = Modifier.fillMaxSize().padding(4.dp),
+                    )
+                } else {
+                    BeatVisualizer(
+                        beats              = beats,
+                        sections           = sections,
+                        canonAlignment     = canon,
+                        currentBeatIndex   = state.playback.currentBeatIndex,
+                        mode               = state.mode,
+                        segments           = track.analysis.segments,
+                        modifier           = Modifier.fillMaxSize().padding(4.dp),
+                    )
+                }
+                // Floating note glyphs drifting over the grid while audio plays
+                NoteParticles(
+                    isPlaying = isPlaying,
+                    modifier  = Modifier.fillMaxSize(),
                 )
                 // Beat count badge
                 Text(
@@ -128,6 +169,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp)
+                    .neonGlow(NeonLime, glowRadius = 8.dp, intensity = 0.4f)
                     .border(2.dp, NeonLime)
                     .background(Black)
                     .padding(16.dp)
@@ -147,6 +189,52 @@ fun PlayerScreen(
                             .fillMaxHeight()
                             .fillMaxWidth(progress)
                             .background(NeonCyan)
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // ── Timer + stats readout (web viz-timer / viz-stats, monospace rose) ──
+                Row(
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        "${fmtClock(state.playback.currentPositionMs)} / ${fmtClock(state.playback.durationMs)}",
+                        style = MaterialTheme.typography.titleMedium,  // monospace
+                        color = NeonRose,
+                    )
+                    // Beats stat — jump-based modes (jukebox/eternal) show the cumulative
+                    // beats-played count (climbs past track length); linear modes show position.
+                    val jumpMode = state.mode.key in setOf("jukebox", "eternal")
+                    if (jumpMode) {
+                        Text(
+                            "BEATS ${state.playback.beatsPlayed}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = RoseGlow,
+                        )
+                    } else {
+                        Text(
+                            "${state.playback.currentBeatIndex + 1} / ${beats.size}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = RoseGlow.copy(alpha = 0.55f),
+                        )
+                    }
+                }
+
+                // Error banner — surfaces load failures instead of a silent dead play button
+                state.playback.errorMessage?.let { msg ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        msg,
+                        style     = MaterialTheme.typography.labelSmall,
+                        color     = NeonOrange,
+                        textAlign = TextAlign.Center,
+                        modifier  = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, NeonOrange.copy(alpha = 0.5f))
+                            .padding(vertical = 8.dp, horizontal = 8.dp),
                     )
                 }
 
@@ -171,6 +259,7 @@ fun PlayerScreen(
                         color  = if (state.playback.isPlaying) NeonCyan else Black,
                         border = BorderStroke(2.dp, NeonCyan),
                         modifier = Modifier
+                            .neonGlow(NeonCyan, glowRadius = 16.dp, intensity = if (state.playback.isPlaying) breathe else 0.4f)
                             .size(64.dp)
                             .clickable { viewModel.togglePlayPause() },
                     ) {
@@ -224,6 +313,20 @@ fun PlayerScreen(
                         valueLabel    = "%.1fx".format(state.advancedSettings.phaseIntensity),
                     )
                     Spacer(Modifier.height(8.dp))
+                }
+
+                // Section Sculptor — arrange detected sections into a custom timeline
+                if (state.mode.key == "sculptor") {
+                    SculptorPanel(
+                        sections    = track.analysis.sections,
+                        arrangement = state.sculptorArrangement,
+                        onAdd       = { viewModel.addSculptorSection(it) },
+                        onRemoveAt  = { viewModel.removeSculptorAt(it) },
+                        onReset     = { viewModel.resetSculptor() },
+                        onClear     = { viewModel.clearSculptor() },
+                        onShuffle   = { viewModel.shuffleSculptor() },
+                        modifier    = Modifier.padding(bottom = 8.dp),
+                    )
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -432,4 +535,13 @@ fun PlayerScreen(
             )
         }
     }
+}
+
+/** Format milliseconds as M:SS (or H:MM:SS for long renders), matching the web viz-timer. */
+private fun fmtClock(ms: Long): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }

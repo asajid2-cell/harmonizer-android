@@ -70,12 +70,15 @@ fun AdvancedSettingsPanel(
 @Composable
 private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     var expanded by remember { mutableStateOf(true) }
+    // Web advanced-group styling: cyan-accented, subtle cyan glow + slightly raised surface
+    // (rgba(0,255,222,0.12) border, inset cyan glow) rather than a flat magenta box.
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 8.dp)
-            .border(1.dp, NeonMagenta.copy(alpha = 0.3f))
-            .background(Black),
+            .neonGlow(NeonCyan, glowRadius = 6.dp, intensity = 0.22f)
+            .border(1.dp, NeonCyan.copy(alpha = 0.25f))
+            .background(SurfaceDark),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -87,10 +90,10 @@ private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> 
             Text(
                 title,
                 style    = MaterialTheme.typography.labelSmall,
-                color    = NeonMagenta,
+                color    = NeonCyan,
                 modifier = Modifier.weight(1f),
             )
-            Text(if (expanded) "▲" else "▼", style = MaterialTheme.typography.labelSmall, color = NeonMagenta)
+            Text(if (expanded) "▲" else "▼", style = MaterialTheme.typography.labelSmall, color = NeonCyan)
         }
         AnimatedVisibility(visible = expanded) {
             Column(

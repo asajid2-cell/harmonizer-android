@@ -36,11 +36,13 @@ fun NeonSlider(
                 color = TextMuted,
                 modifier = Modifier.weight(1f),
             )
-            // Cyan circular value badge
+            // Cyan circular value badge — web's glowing voice-count pill
             Surface(
                 shape = androidx.compose.foundation.shape.CircleShape,
                 color = NeonCyan,
-                modifier = Modifier.size(28.dp),
+                modifier = Modifier
+                    .neonGlow(NeonCyan, glowRadius = 9.dp, intensity = 0.85f)
+                    .size(28.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(

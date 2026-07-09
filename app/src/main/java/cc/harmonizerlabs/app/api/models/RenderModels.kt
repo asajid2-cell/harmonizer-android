@@ -27,7 +27,8 @@ data class RenderStatusResponse(
 )
 
 data class RenderResult(
-    @SerializedName("url")      val url: String,
+    // Server returns the rendered file as `audioUrl` (the web reads result.audioUrl); accept `url` too.
+    @SerializedName(value = "audioUrl", alternate = ["url"]) val url: String,
     @SerializedName("filename") val filename: String? = null,
     @SerializedName("duration") val duration: Double? = null,
 )

@@ -1,13 +1,22 @@
 package cc.harmonizerlabs.app.player
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
+import androidx.core.app.NotificationCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import cc.harmonizerlabs.app.BuildConfig
@@ -23,6 +32,7 @@ import kotlinx.coroutines.flow.update
 data class PlaybackState(
     val isPlaying: Boolean = false,
     val currentBeatIndex: Int = 0,
+    val beatsPlayed: Int = 0,
     val currentPositionMs: Long = 0L,
     val durationMs: Long = 0L,
     val mode: String = "canon",
@@ -33,6 +43,7 @@ data class PlaybackState(
     val trackArtist: String = "",
     val phaseIntensity: Float = 1.0f,
     val baseAudioOnly: Boolean = false,
+    val errorMessage: String? = null,
 )
 
 class HarmonizerPlaybackService : MediaSessionService() {
@@ -57,31 +68,79 @@ class HarmonizerPlaybackService : MediaSessionService() {
     // Default dispatcher for beat timing — more accurate than Main under UI load
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var beatJob: Job? = null
+    // Source-error retries — large lossless FLACs streamed over HTTPS occasionally drop a
+    // chunk (esp. canon mode streaming two files at once); a re-prepare usually recovers.
+    private var sourceRetries = 0
+
+    // Robust HTTP source — generous timeouts + redirects so big FLAC streams don't error out.
+    private fun buildPlayer(volume: Float, repeat: Int): ExoPlayer {
+        val http = DefaultHttpDataSource.Factory()
+            .setUserAgent("HarmonizerAndroid/1.0 (ExoPlayer)")
+            .setConnectTimeoutMs(30_000)
+            .setReadTimeoutMs(30_000)
+            .setAllowCrossProtocolRedirects(true)
+        val sourceFactory = DefaultMediaSourceFactory(DefaultDataSource.Factory(this, http))
+        return ExoPlayer.Builder(this)
+            .setMediaSourceFactory(sourceFactory)
+            .build()
+            .also { it.volume = volume; it.repeatMode = repeat }
+    }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     override fun onCreate() {
         super.onCreate()
+        createNotificationChannel()
 
-        mainPlayer = ExoPlayer.Builder(this).build().also { p ->
-            p.volume = MAIN_VOLUME
-            p.repeatMode = Player.REPEAT_MODE_OFF
+        mainPlayer = buildPlayer(MAIN_VOLUME, Player.REPEAT_MODE_OFF).also { p ->
             p.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _state.update { it.copy(isPlaying = isPlaying) }
-                    if (isPlaying) startBeatLoop() else beatJob?.cancel()
+                    if (isPlaying) {
+                        // On API 31+ startForeground() throws ForegroundServiceStartNotAllowedException
+                        // if the app isn't in a foreground-permitted state (e.g. playback auto-starts
+                        // mid screen-transition, or after a source-error retry). Never let that crash
+                        // playback — show the notification when allowed, otherwise keep playing without it.
+                        try {
+                            startForeground(NOTIFICATION_ID, buildNotification())
+                        } catch (_: Exception) { /* foreground promotion denied; audio still plays */ }
+                        startBeatLoop()
+                    } else {
+                        @Suppress("DEPRECATION")
+                        stopForeground(false)
+                        beatJob?.cancel()
+                    }
                 }
                 override fun onPlaybackStateChanged(state: Int) {
+                    if (state == Player.STATE_READY) {
+                        // ExoPlayer's decoded duration is authoritative — fixes any mismatch
+                        // with the analysis JSON's audio_summary.duration.
+                        val d = mainPlayer.duration
+                        if (d > 0) _state.update { it.copy(durationMs = d, errorMessage = null) }
+                        sourceRetries = 0
+                    }
                     if (state == Player.STATE_ENDED && _state.value.loopEnabled) {
                         seekToStart()
+                    }
+                }
+                override fun onPlayerError(error: PlaybackException) {
+                    // Transient source/IO errors: re-prepare a couple times before giving up,
+                    // rather than silently dying on a dead play button.
+                    if (sourceRetries < MAX_SOURCE_RETRIES) {
+                        sourceRetries++
+                        serviceScope.launch(Dispatchers.Main) {
+                            mainPlayer.prepare()
+                            if (engine.requiresOverlayPlayer) overlayPlayer.prepare()
+                            mainPlayer.play()
+                            if (engine.requiresOverlayPlayer) overlayPlayer.play()
+                        }
+                    } else {
+                        _state.update { it.copy(errorMessage = "Couldn't load audio — tap play to retry") }
                     }
                 }
             })
         }
 
-        overlayPlayer = ExoPlayer.Builder(this).build().also { p ->
-            p.volume = OVERLAY_VOLUME
-            p.repeatMode = Player.REPEAT_MODE_ALL
-        }
+        overlayPlayer = buildPlayer(OVERLAY_VOLUME, Player.REPEAT_MODE_ALL)
 
         val intent = Intent(this, MainActivity::class.java)
         val pi = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
@@ -100,6 +159,11 @@ class HarmonizerPlaybackService : MediaSessionService() {
         return if (intent?.action == SERVICE_INTERFACE) super.onBind(intent) else binder
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        return START_STICKY
+    }
+
     override fun onDestroy() {
         serviceScope.cancel()
         mediaSession?.run { release(); mediaSession = null }
@@ -113,8 +177,10 @@ class HarmonizerPlaybackService : MediaSessionService() {
     fun loadTrack(track: TrackData, modeKey: String) {
         trackData = track
         engine = engineFor(modeKey)
+        sourceRetries = 0
 
-        val audioUrl = resolveAudioUrl(track.info.url)
+        // Web parity: prefer track.audio_url, fall back to info.url.
+        val audioUrl = resolveAudioUrl(track.audioUrl ?: track.info.url)
         val mainItem = MediaItem.Builder()
             .setUri(audioUrl)
             .setMediaMetadata(
@@ -146,11 +212,19 @@ class HarmonizerPlaybackService : MediaSessionService() {
                 trackArtist = track.artist ?: "",
                 durationMs  = (track.audioSummary.duration * 1000).toLong(),
                 currentBeatIndex = 0,
+                beatsPlayed = 0,
             )
         }
     }
 
     fun play() {
+        // Manual play also clears a prior error and re-arms retries (the "tap to retry" path).
+        if (_state.value.errorMessage != null || mainPlayer.playbackState == Player.STATE_IDLE) {
+            sourceRetries = 0
+            _state.update { it.copy(errorMessage = null) }
+            mainPlayer.prepare()
+            if (engine.requiresOverlayPlayer) overlayPlayer.prepare()
+        }
         mainPlayer.play()
         if (engine.requiresOverlayPlayer) overlayPlayer.play()
     }
@@ -174,6 +248,18 @@ class HarmonizerPlaybackService : MediaSessionService() {
     fun setVoiceCount(n: Int) = _state.update { it.copy(voiceCount = n) }
     fun setLoop(v: Boolean)   = _state.update { it.copy(loopEnabled = v) }
     fun setNoBurnout(v: Boolean) = _state.update { it.copy(noBurnout = v) }
+
+    /** Section Sculptor — set the section play order and seek to its start. */
+    fun setSculptorArrangement(order: List<Int>) {
+        val eng = engine as? SculptorEngine ?: return
+        val track = trackData ?: return
+        eng.arrangement = order
+        val firstBeat = eng.restart(track.analysis)
+        seekToBeat(firstBeat)
+        // Re-sync the beat loop so its local index matches the seek (the loop only catches up
+        // forward on its own, so a backward seek from an edit would otherwise desync).
+        if (mainPlayer.isPlaying) startBeatLoop()
+    }
 
     fun setPhaseIntensity(v: Float) {
         _state.update { it.copy(phaseIntensity = v) }
@@ -243,7 +329,9 @@ class HarmonizerPlaybackService : MediaSessionService() {
                     val beatEndMs = ((currentBeat.start + currentBeat.duration) * 1000).toLong()
                     val remainMs  = beatEndMs - posMs
 
-                    _state.update { it.copy(currentBeatIndex = currentIdx) }
+                    // Count every beat dwelt on — cumulative, so jukebox/eternal climb past
+                    // the track length as the engine jumps and loops (web's "beats played").
+                    _state.update { it.copy(currentBeatIndex = currentIdx, beatsPlayed = it.beatsPlayed + 1) }
 
                     if (remainMs > 20) {
                         delay(remainMs - 10) // wake up just before the beat ends
@@ -301,8 +389,33 @@ class HarmonizerPlaybackService : MediaSessionService() {
         return "${BuildConfig.BASE_URL.trimEnd('/')}$url"
     }
 
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ch = NotificationChannel(CHANNEL_ID, "Harmonizer Playback", NotificationManager.IMPORTANCE_LOW)
+            ch.description = "Music playback controls"
+            getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
+        }
+    }
+
+    private fun buildNotification(): Notification {
+        val title  = _state.value.trackTitle.ifBlank { "Harmonizer" }
+        val artist = _state.value.trackArtist
+        val intent = Intent(this, MainActivity::class.java)
+        val pi     = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(artist)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentIntent(pi)
+            .setOngoing(true)
+            .build()
+    }
+
     companion object {
-        private const val MAIN_VOLUME    = 0.82f
-        private const val OVERLAY_VOLUME = 0.48f
+        private const val CHANNEL_ID         = "harmonizer_playback"
+        private const val NOTIFICATION_ID    = 1001
+        private const val MAIN_VOLUME        = 0.82f
+        private const val OVERLAY_VOLUME     = 0.48f
+        private const val MAX_SOURCE_RETRIES = 3
     }
 }

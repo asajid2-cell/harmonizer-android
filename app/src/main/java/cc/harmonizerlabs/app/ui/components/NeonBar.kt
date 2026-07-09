@@ -10,23 +10,27 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import cc.harmonizerlabs.app.ui.theme.*
 
-/** Animated cycling neon top bar — matches the CSS gradient bar on harmonizer.html */
+/**
+ * Animated neon top bar — the rainbow gradient strip atop every harmonizer.html screen,
+ * including its pulsing magenta box-shadow glow (CSS `bar-glow 3s ease-in-out`).
+ */
 @Composable
 fun NeonBar(modifier: Modifier = Modifier) {
     val inf = rememberInfiniteTransition(label = "neon")
-    val offset by inf.animateFloat(
-        initialValue = 0f,
-        targetValue  = 1f,
+    val glow by inf.animateFloat(
+        initialValue = 0.4f,
+        targetValue  = 0.95f,
         animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = LinearEasing),
+            animation = tween(3000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
         ),
-        label = "neon_offset",
+        label = "neon_glow",
     )
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(3.dp)
+            .height(4.dp)
+            .neonGlow(NeonMagenta, glowRadius = 12.dp, intensity = glow)
             .background(
                 Brush.horizontalGradient(
                     colors = listOf(
